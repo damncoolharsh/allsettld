@@ -140,4 +140,23 @@ router.post("/updateUser", upload.single("profilePic"), auth_1.verifyToken, [(0,
         res.status(400).json({ message: "Something went wrong" });
     }
 }));
+router.post("/getUserData", auth_1.verifyToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const id = (_a = req.query) === null || _a === void 0 ? void 0 : _a.id;
+        if (!id) {
+            return res.status(400).json({ message: "User id is required" });
+        }
+        const user = yield user_1.default.findOne({ _id: id });
+        if (!user) {
+            res.status(400).json({ message: "User not found" });
+            return;
+        }
+        res.json({ data: user });
+    }
+    catch (err) {
+        console.log("🚀 ~ file: user.ts:router.post ~ err:", err);
+        res.status(400).json({ message: "Something went wrong" });
+    }
+}));
 exports.default = router;
