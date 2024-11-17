@@ -144,28 +144,24 @@ router.post(
   }
 );
 
-router.post(
-  "/getUserData",
-  verifyToken,
-  async (req: Request, res: Response) => {
-    try {
-      const id = req.query?.id;
+router.get("/getUserData", verifyToken, async (req: Request, res: Response) => {
+  try {
+    const id = req.query?.id;
 
-      if (!id) {
-        return res.status(400).json({ message: "User id is required" });
-      }
-
-      const user = await User.findOne({ _id: id });
-      if (!user) {
-        res.status(400).json({ message: "User not found" });
-        return;
-      }
-      res.json({ data: user });
-    } catch (err) {
-      console.log("🚀 ~ file: user.ts:router.post ~ err:", err);
-      res.status(400).json({ message: "Something went wrong" });
+    if (!id) {
+      return res.status(400).json({ message: "User id is required" });
     }
+
+    const user = await User.findOne({ _id: id });
+    if (!user) {
+      res.status(400).json({ message: "User not found" });
+      return;
+    }
+    res.json({ data: user });
+  } catch (err) {
+    console.log("🚀 ~ file: user.ts:router.post ~ err:", err);
+    res.status(400).json({ message: "Something went wrong" });
   }
-);
+});
 
 export default router;

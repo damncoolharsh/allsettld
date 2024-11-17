@@ -8,6 +8,7 @@ export type UserType = {
   name: string;
   profilePic: string;
   phoneOtp: string;
+  nonGroupId: string;
 };
 
 const userSchema = new mongoose.Schema<UserType>({
@@ -17,6 +18,7 @@ const userSchema = new mongoose.Schema<UserType>({
   name: { type: String, required: true },
   profilePic: { type: String },
   phoneOtp: { type: String },
+  nonGroupId: { type: String },
 });
 
 userSchema.pre("save", async function (next) {
