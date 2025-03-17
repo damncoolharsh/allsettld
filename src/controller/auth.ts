@@ -13,7 +13,7 @@ export class AuthController {
 
     const { email, password } = req.body;
     try {
-      const user = await User.findOne({ email: email });
+      const user = await User.findOne({ email: email }).select("+password");
       if (!user) {
         return res
           .status(400)

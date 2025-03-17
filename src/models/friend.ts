@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 type Friend = {
   _id: mongoose.Types.ObjectId;
   user_id: mongoose.Types.ObjectId;
+  user_mobile: string;
   friend_id: mongoose.Types.ObjectId;
   friend_mobile: string;
   friend_name: string;
@@ -10,10 +11,11 @@ type Friend = {
 };
 
 const friendSchema = new mongoose.Schema<Friend>({
-  user_id: { type: mongoose.Schema.Types.ObjectId, required: true },
+  user_id: { type: mongoose.Schema.Types.ObjectId },
+  user_mobile: { type: String },
   friend_id: { type: mongoose.Schema.Types.ObjectId },
-  friend_mobile: { type: String, required: true },
-  friend_name: { type: String, required: true },
+  friend_mobile: { type: String },
+  friend_name: { type: String },
   created_at: { type: Date, default: Date.now },
 });
 

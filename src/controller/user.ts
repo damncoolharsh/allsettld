@@ -50,11 +50,16 @@ export class UserController {
           await group.save();
         }
       }
-      const balances = await Balance.find({ mobile: user.mobile });
+      const balances = await Balance.find({ payee_mobile: user.mobile });
       if (balances.length > 0) {
         for (let i = 0; i < balances.length; i++) {
           const balance = balances[i];
-          balance.payer_id = user._id.toString();
+          if (!balance.payer_id) {
+            balance.payer_id = user._id.toString();
+          }
+          if (!balance.payee_id) {
+            balance.payee_id = user._id.toString();
+          }
           await balance.save();
         }
       }

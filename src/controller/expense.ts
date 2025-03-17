@@ -66,27 +66,33 @@ export class ExpenseController {
           user_mobile: expenseDetails[i].mobile,
         });
         let balance = await Balance.findOne({
-          $or: [
+          $and: [
             {
-              $and: [
-                { payer_id: expenseDetails[i].id || "NA" },
-                { payee_id: paidBy || "NA" },
-              ],
+              group_id: groupId,
             },
             {
-              $and: [
-                { payer_id: paidBy || "NA" },
-                { payee_id: expenseDetails[i].id || "NA" },
-              ],
-            },
-            {
-              $and: [
-                { payer_id: paidBy || "NA" },
-                { payee_mobile: expenseDetails[i].mobile || "NA" },
+              $or: [
+                {
+                  $and: [
+                    { payer_id: expenseDetails[i].id || "NA" },
+                    { payee_id: paidBy || "NA" },
+                  ],
+                },
+                {
+                  $and: [
+                    { payer_id: paidBy || "NA" },
+                    { payee_id: expenseDetails[i].id || "NA" },
+                  ],
+                },
+                {
+                  $and: [
+                    { payer_id: paidBy || "NA" },
+                    { payee_mobile: expenseDetails[i].mobile || "NA" },
+                  ],
+                },
               ],
             },
           ],
-          group_id: groupId,
         });
         if (!balance) {
           balance = new Balance({
@@ -146,27 +152,31 @@ export class ExpenseController {
           if (split) {
             split.amount = expenseDetails[i].balance;
             let balance = await Balance.findOne({
-              $or: [
+              $and: [
+                { group_id: expense.group_id },
                 {
-                  $and: [
-                    { payer_id: expenseDetails[i].id || "NA" },
-                    { payee_id: expense.paid_by || "NA" },
-                  ],
-                },
-                {
-                  $and: [
-                    { payer_id: expense.paid_by || "NA" },
-                    { payee_id: expenseDetails[i].id || "NA" },
-                  ],
-                },
-                {
-                  $and: [
-                    { payer_id: expense.paid_by || "NA" },
-                    { payee_mobile: expenseDetails[i].mobile || "NA" },
+                  $or: [
+                    {
+                      $and: [
+                        { payer_id: expenseDetails[i].id || "NA" },
+                        { payee_id: expense.paid_by || "NA" },
+                      ],
+                    },
+                    {
+                      $and: [
+                        { payer_id: expense.paid_by || "NA" },
+                        { payee_id: expenseDetails[i].id || "NA" },
+                      ],
+                    },
+                    {
+                      $and: [
+                        { payer_id: expense.paid_by || "NA" },
+                        { payee_mobile: expenseDetails[i].mobile || "NA" },
+                      ],
+                    },
                   ],
                 },
               ],
-              group_id: expense.group_id,
             });
             if (!balance) {
               balance = new Balance({
