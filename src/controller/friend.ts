@@ -12,11 +12,11 @@ export class FriendController {
 
       const pageSize = 100;
       const pageNumber = parseInt(req.query.page ? req.query.toString() : "0");
-      const friends = await Friend.find({ userId: id })
+      const friends = await Friend.find({ user_id: id })
         .populate("friend_id")
         .skip(pageNumber)
         .limit(pageSize);
-      const total = await Friend.find({ userId: id }).countDocuments();
+      const total = await Friend.find({ user_id: id }).countDocuments();
 
       res.json({
         data: friends,

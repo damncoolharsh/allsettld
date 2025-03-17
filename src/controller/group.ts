@@ -205,6 +205,64 @@ export class GroupController {
         });
         await newGroupMember.save();
       }
+      const allMembers = await GroupMember.find({ group_id: groupId });
+      for (let i = 0; i < allMembers.length; i++) {
+        const userId = allMembers[i].member_id;
+        const user1 = userId?.toString();
+        const user1Mobile = allMembers[i].mobile;
+
+        const friendRel1 = await Friend.findOne({
+          $and: [
+            {
+              $or: [
+                ...(user1 ? [{ user_id: user1 }] : []),
+                ...(user1Mobile ? [{ user_mobile: user1Mobile }] : []),
+              ],
+            },
+            {
+              $or: [
+                ...(memberId ? [{ friend_id: memberId }] : []),
+                ...(mobile ? [{ friend_mobile: mobile }] : []),
+              ],
+            },
+          ],
+        });
+        const friendRel2 = await Friend.findOne({
+          $and: [
+            {
+              $or: [
+                ...(memberId ? [{ user_id: memberId }] : []),
+                ...(mobile ? [{ user_mobile: mobile }] : []),
+              ],
+            },
+            {
+              $or: [
+                ...(user1 ? [{ friend_id: user1 }] : []),
+                ...(user1Mobile ? [{ friend_mobile: user1Mobile }] : []),
+              ],
+            },
+          ],
+        });
+
+        if (!friendRel1) {
+          const friend = new Friend({
+            user_id: user1 || null,
+            user_mobile: user1Mobile || null,
+            friend_id: memberId || null,
+            friend_mobile: mobile || null,
+          });
+          await friend.save();
+        }
+        if (!friendRel2) {
+          const friend = new Friend({
+            user_id: memberId || null,
+            friend_mobile: user1Mobile || null,
+            friend_id: user1 || null,
+            user_mobile: mobile || null,
+          });
+          await friend.save();
+        }
+      }
       res.json({ message: "Member added successfully" });
     } catch (err) {
       console.log("🚀 ~ file: group.ts:router.post ~ err:", err);
@@ -223,11 +281,15 @@ export class GroupController {
       const newGroupMembers: any[] = [];
       for (let i = 0; i < members.length; i++) {
         const member = members[i];
-        console.log("🚀 ~ GroupController ~ bulkAddMember ~ member:", member);
         const alreadyMember = await GroupMember.findOne({
           $and: [
             { group_id: groupId },
-            { $or: [{ member_id: member.id }, { mobile: member.mobile }] },
+            {
+              $or: [
+                { member_id: member.id || null },
+                { mobile: member.mobile || "NA" },
+              ],
+            },
           ],
         });
         if (alreadyMember) {
@@ -240,148 +302,81 @@ export class GroupController {
               member_id: member.id,
             })
           );
+        } else {
+          newGroupMembers.push(
+            new GroupMember({
+              group_id: group._id,
+              name: member.name,
+              mobile: member.mobile,
+            })
+          );
         }
-        newGroupMembers.push(
-          new GroupMember({
-            group_id: group._id,
-            name: member.name,
-            mobile: member.mobile,
-          })
-        );
       }
       await GroupMember.insertMany(newGroupMembers);
       const allMembers = await GroupMember.find({ group_id: groupId });
       for (let i = 0; i < allMembers.length; i++) {
         for (let j = i + 1; j < allMembers.length; j++) {
           if (i === j) continue;
-          const user1 = allMembers[i];
-          const user2 = allMembers[j];
+          const userId = allMembers[i].member_id;
+          const user1 = userId?.toString();
+          const user1Mobile = allMembers[i].mobile;
 
-          if (user1.member_id && user2.member_id) {
-            const friendRel1 = await Friend.findOne({
-              $and: [
-                { friend_id: user1.member_id },
-                { user_id: user2.member_id },
-              ],
+          const memberId = allMembers[j].member_id;
+          const mobile = allMembers[j].mobile;
+
+          const friendRel1 = await Friend.findOne({
+            $and: [
+              {
+                $or: [
+                  ...(user1 ? [{ user_id: user1 }] : []),
+                  ...(user1Mobile ? [{ user_mobile: user1Mobile }] : []),
+                ],
+              },
+              {
+                $or: [
+                  ...(memberId ? [{ friend_id: memberId }] : []),
+                  ...(mobile ? [{ friend_mobile: mobile }] : []),
+                ],
+              },
+            ],
+          });
+          const friendRel2 = await Friend.findOne({
+            $and: [
+              {
+                $or: [
+                  ...(memberId ? [{ user_id: memberId }] : []),
+                  ...(mobile ? [{ user_mobile: mobile }] : []),
+                ],
+              },
+              {
+                $or: [
+                  ...(user1 ? [{ friend_id: user1 }] : []),
+                  ...(user1Mobile ? [{ friend_mobile: user1Mobile }] : []),
+                ],
+              },
+            ],
+          });
+
+          if (!friendRel1) {
+            const friend = new Friend({
+              user_id: user1 || null,
+              user_mobile: user1Mobile || null,
+              friend_id: memberId || null,
+              friend_mobile: mobile || null,
             });
-            const friendRel2 = await Friend.findOne({
-              $and: [
-                { friend_id: user2.member_id },
-                { user_id: user1.member_id },
-              ],
+            await friend.save();
+          }
+          if (!friendRel2) {
+            const friend = new Friend({
+              user_id: memberId || null,
+              friend_mobile: user1Mobile || null,
+              friend_id: user1 || null,
+              user_mobile: mobile || null,
             });
-            if (!friendRel1) {
-              const friend = new Friend({
-                user_id: user1.member_id,
-                friend_id: user2.member_id,
-                friend_mobile: user2.mobile,
-                friend_name: user2.name,
-              });
-              await friend.save();
-            }
-            if (!friendRel2) {
-              const friend = new Friend({
-                user_id: user2.member_id,
-                friend_id: user1.member_id,
-                friend_mobile: user1.mobile,
-                friend_name: user1.name,
-              });
-              await friend.save();
-            }
-          } else if (user1.mobile && user2.mobile) {
-            const friendRel1 = await Friend.findOne({
-              $and: [
-                { friend_mobile: user1.mobile },
-                { user_mobile: user2.mobile },
-              ],
-            });
-            const friendRel2 = await Friend.findOne({
-              $and: [
-                { friend_mobile: user2.mobile },
-                { user_mobile: user1.mobile },
-              ],
-            });
-            if (!friendRel1) {
-              const friend = new Friend({
-                user_mobile: user1.mobile,
-                friend_mobile: user2.mobile,
-                friend_name: user2.name,
-              });
-              await friend.save();
-            }
-            if (!friendRel2) {
-              const friend = new Friend({
-                user_mobile: user2.mobile,
-                friend_mobile: user1.mobile,
-                friend_name: user1.name,
-              });
-              await friend.save();
-            }
-          } else if (user1.member_id && user2.mobile) {
-            const friendRel1 = await Friend.findOne({
-              $and: [
-                { friend_id: user1.member_id },
-                { user_mobile: user2.mobile },
-              ],
-            });
-            const friendRel2 = await Friend.findOne({
-              $and: [
-                { friend_mobile: user2.mobile },
-                { user_id: user1.member_id },
-              ],
-            });
-            if (!friendRel1) {
-              const friend = new Friend({
-                user_id: user1.member_id,
-                friend_mobile: user2.mobile,
-                friend_name: user2.name,
-              });
-              await friend.save();
-            }
-            if (!friendRel2) {
-              const friend = new Friend({
-                user_mobile: user2.mobile,
-                friend_id: user1.member_id,
-                friend_name: user1.name,
-              });
-              await friend.save();
-            }
-          } else if (user1.mobile && user2.member_id) {
-            const friendRel1 = await Friend.findOne({
-              $and: [
-                { friend_id: user2.member_id },
-                { user_mobile: user1.mobile },
-              ],
-            });
-            const friendRel2 = await Friend.findOne({
-              $and: [
-                { friend_mobile: user1.mobile },
-                { user_id: user2.member_id },
-              ],
-            });
-            if (!friendRel1) {
-              const friend = new Friend({
-                user_id: user2.member_id,
-                friend_mobile: user1.mobile,
-                friend_name: user1.name,
-              });
-              await friend.save();
-            }
-            if (!friendRel2) {
-              const friend = new Friend({
-                user_mobile: user1.mobile,
-                friend_id: user2.member_id,
-                friend_name: user2.name,
-              });
-              await friend.save();
-            }
+            await friend.save();
           }
         }
       }
-      console.log(
-        "🚀 ~ GroupController ~ bulkAddMember ~ allMembers:",
-        allMembers
-      );
       res.json({ message: "Members added successfully" });
     } catch (err) {
       console.log("🚀 ~ file: group.ts:router.post ~ err:", err);
