@@ -8,17 +8,15 @@ export type UserType = {
   name: string;
   profilePic: string;
   phoneOtp: string;
-  nonGroupId: string;
 };
 
 const userSchema = new mongoose.Schema<UserType>({
   email: { type: String, required: true, unique: true },
   mobile: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+  password: { type: String, required: true, select: false },
   name: { type: String, required: true },
   profilePic: { type: String },
   phoneOtp: { type: String },
-  nonGroupId: { type: String },
 });
 
 userSchema.pre("save", async function (next) {

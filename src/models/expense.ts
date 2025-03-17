@@ -1,27 +1,19 @@
 import mongoose from "mongoose";
 
-type ExpenseType = {
-  members: MemberType[];
+export type ExpenseType = {
+  group_id: string;
+  description?: string;
   amount: number;
-  _id: string;
-  groupId: string;
-  date: Date;
-};
-
-export type MemberType = {
-  id: string;
-  balance: string;
+  paid_by: string;
+  created_at: Date;
 };
 
 const expenseSchema = new mongoose.Schema<ExpenseType>({
-  members: [
-    {
-      id: { type: String, required: true },
-      balance: { type: String, required: true },
-    },
-  ],
+  group_id: { type: String, required: true },
+  description: { type: String },
   amount: { type: Number, required: true },
-  groupId: { type: String, required: true },
+  paid_by: { type: String, required: true },
+  created_at: { type: Date, default: Date.now },
 });
 
 const Expense = mongoose.model<ExpenseType>("Expense", expenseSchema);

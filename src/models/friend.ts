@@ -1,22 +1,20 @@
 import mongoose from "mongoose";
 
 type Friend = {
-  _id: string;
-  name: string;
-  mobileNumber: string;
-  profilePic?: string;
-  balance: number;
-  userId: string;
-  friendId?: string;
+  _id: mongoose.Types.ObjectId;
+  user_id: mongoose.Types.ObjectId;
+  friend_id: mongoose.Types.ObjectId;
+  friend_mobile: string;
+  friend_name: string;
+  created_at: Date;
 };
 
 const friendSchema = new mongoose.Schema<Friend>({
-  name: { type: String, required: true },
-  mobileNumber: { type: String, required: true },
-  profilePic: { type: String },
-  balance: { type: Number, default: 0 },
-  userId: { type: String, required: true },
-  friendId: { type: String },
+  user_id: { type: mongoose.Schema.Types.ObjectId, required: true },
+  friend_id: { type: mongoose.Schema.Types.ObjectId },
+  friend_mobile: { type: String, required: true },
+  friend_name: { type: String, required: true },
+  created_at: { type: Date, default: Date.now },
 });
 
 const Friend = mongoose.model<Friend>("Friend", friendSchema);

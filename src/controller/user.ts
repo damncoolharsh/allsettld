@@ -1,0 +1,160 @@
+import express, { Request, Response } from "express";
+import { check, validationResult } from "express-validator";
+import multer from "multer";
+import User from "../models/user";
+import { generateOTP, sendSms, uploadImages } from "../utils/helper";
+import jwt from "jsonwebtoken";
+import { verifyToken } from "../middleware/auth";
+import Friend from "../models/friend";
+import GroupMember from "../models/groupMember";
+import Balance from "../models/balance";
+import ExpenseSplit from "../models/expenseSplit";
+
+export class UserController {
+  async register(req: Request, res: Response) {
+    const errors = validationResult(req);
+
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    try {
+      const { mobile } = req.body;
+      let user = await User.findOne({ mobile: mobile });
+      if (user) {
+        res.status(400).json({ message: "User already exists" });
+        return;
+      }
+
+      const imageFile = req.file as Express.Multer.File;
+      if (imageFile) {
+        const profilePics = await uploadImages([imageFile]);
+        req.body.profilePic = profilePics[0];
+      }
+
+      user = new User(req.body);
+      await user.save();
+      const friendsData = await Friend.find({ friend_mobile: user.mobile });
+      if (friendsData.length > 0) {
+        for (let i = 0; i < friendsData.length; i++) {
+          const friend = friendsData[i];
+          friend.friend_id = user._id;
+          await friend.save();
+        }
+      }
+      const groupMember = await GroupMember.find({ mobile: user.mobile });
+      if (groupMember.length > 0) {
+        for (let i = 0; i < groupMember.length; i++) {
+          const group = groupMember[i];
+          group.member_id = user._id;
+          await group.save();
+        }
+      }
+      const balances = await Balance.find({ mobile: user.mobile });
+      if (balances.length > 0) {
+        for (let i = 0; i < balances.length; i++) {
+          const balance = balances[i];
+          balance.payer_id = user._id.toString();
+          await balance.save();
+        }
+      }
+      const expenseSplit = await ExpenseSplit.find({
+        user_mobile: user.mobile,
+      });
+      if (expenseSplit.length > 0) {
+        for (let i = 0; i < expenseSplit.length; i++) {
+          const expense = expenseSplit[i];
+          expense.user_id = user._id;
+          await expense.save();
+        }
+      }
+      res.json({ message: "User registered successfully", data: user });
+    } catch (err) {
+      res.status(400).json({ message: "Something went wrong" });
+    }
+  }
+
+  async sendOtp(req: Request, res: Response) {
+    try {
+      const { mobile } = req.body;
+      let user = await User.findOne({ mobile: mobile });
+      if (!user) {
+        return res.status(400).json({ message: "User not found" });
+      }
+
+      const otp = generateOTP(6);
+      user.phoneOtp = otp;
+      await user.save();
+      sendSms("91" + mobile, `#allsettld, Your OTP is ${otp}`);
+      res.json({ message: "OTP sent successfully" });
+    } catch (err) {
+      console.log("🚀 ~ file: user.ts:router.post ~ err:", err);
+      res.status(400).json({ message: "Something went wrong" });
+    }
+  }
+
+  async verifyOtp(req: Request, res: Response) {
+    try {
+      const { mobile, otp } = req.body;
+      let user = await User.findOne({ mobile: mobile });
+      if (!user) {
+        res.status(400).json({ message: "User not found" });
+        return;
+      }
+      if (user.phoneOtp !== otp) {
+        res.status(400).json({ message: "Invalid OTP" });
+        return;
+      }
+      user.phoneOtp = "";
+      await user.save();
+      const token = jwt.sign({ user }, process.env.JWT_SECRET as string, {
+        expiresIn: "24h",
+      });
+      res.json({ token, message: "OTP verified successfully" });
+    } catch (err) {
+      console.log("🚀 ~ file: user.ts:router.post ~ err:", err);
+      res.status(400).json({ message: "Something went wrong" });
+    }
+  }
+
+  async updateUser(req: Request, res: Response) {
+    try {
+      const user = await User.findOne({ _id: req.body._id });
+      if (!user) {
+        res.status(400).json({ message: "User not found" });
+        return;
+      }
+      if (req.body.name) user.name = req.body.name;
+      const imageFile = req.file as Express.Multer.File;
+      if (imageFile) {
+        const profilePics = await uploadImages([imageFile]);
+        user.profilePic = profilePics[0];
+      }
+      await user.save();
+      res.json({ message: "User updated successfully" });
+    } catch (err) {
+      console.log("🚀 ~ file: user.ts:router.post ~ err:", err);
+      res.status(400).json({ message: "Something went wrong" });
+    }
+  }
+
+  async getUserData(req: Request, res: Response) {
+    try {
+      const id = req.query?.id;
+
+      if (!id) {
+        return res.status(400).json({ message: "User id is required" });
+      }
+
+      const user = await User.findOne({ _id: id });
+      if (!user) {
+        res.status(400).json({ message: "User not found" });
+        return;
+      }
+      res.json({ data: user });
+    } catch (err) {
+      console.log("🚀 ~ file: user.ts:router.post ~ err:", err);
+      res.status(400).json({ message: "Something went wrong" });
+    }
+  }
+}
