@@ -8,6 +8,7 @@ type Friend = {
   friend_mobile: string;
   friend_name: string;
   created_at: Date;
+  balance?: number;
 };
 
 const friendSchema = new mongoose.Schema<Friend>({

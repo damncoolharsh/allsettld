@@ -3,9 +3,8 @@ import { validationResult } from "express-validator";
 import Group from "../models/group";
 import GroupMember, { GroupMemberType } from "../models/groupMember";
 import Balance from "../models/balance";
-import { Document, Types } from "mongoose";
-import { ObjectId } from "mongodb";
 import Friend from "../models/friend";
+import User from "../models/user";
 
 interface BalanceInfoType {
   balance?: number;
@@ -96,7 +95,7 @@ export class GroupController {
             ],
           });
           let amount = balance?.amount || 0;
-          if (balance?.payer_id === members[i].member_id?._id?.toString()) {
+          if (balance?.payer_id !== members[i].member_id?._id.toString()) {
             amount = amount * -1;
           }
           members[i].balance = amount;
@@ -198,6 +197,14 @@ export class GroupController {
         });
         await newGroupMember.save();
       } else {
+        const user = await User.findOne({ mobile: mobile });
+        if (user) {
+          const newGroupMember = new GroupMember({
+            group_id: group._id,
+            member_id: user._id,
+          });
+          await newGroupMember.save();
+        }
         const newGroupMember = new GroupMember({
           group_id: group._id,
           name: name,
@@ -207,9 +214,17 @@ export class GroupController {
       }
       const allMembers = await GroupMember.find({ group_id: groupId });
       for (let i = 0; i < allMembers.length; i++) {
-        const userId = allMembers[i].member_id;
+        let userId = allMembers[i].member_id;
         const user1 = userId?.toString();
-        const user1Mobile = allMembers[i].mobile;
+        let user1Mobile = allMembers[i].mobile;
+
+        if (user1Mobile) {
+          const mobileUser = await User.findOne({ mobile: user1Mobile });
+          if (mobileUser) {
+            userId = mobileUser._id;
+            user1Mobile = undefined;
+          }
+        }
 
         const friendRel1 = await Friend.findOne({
           $and: [
@@ -250,6 +265,7 @@ export class GroupController {
             user_mobile: user1Mobile || null,
             friend_id: memberId || null,
             friend_mobile: mobile || null,
+            friend_name: name || null,
           });
           await friend.save();
         }
@@ -259,6 +275,7 @@ export class GroupController {
             friend_mobile: user1Mobile || null,
             friend_id: user1 || null,
             user_mobile: mobile || null,
+            friend_name: name || null,
           });
           await friend.save();
         }
@@ -300,6 +317,7 @@ export class GroupController {
             new GroupMember({
               group_id: group._id,
               member_id: member.id,
+              name: member.name,
             })
           );
         } else {
@@ -363,6 +381,7 @@ export class GroupController {
               user_mobile: user1Mobile || null,
               friend_id: memberId || null,
               friend_mobile: mobile || null,
+              friend_name: allMembers[j].name || null,
             });
             await friend.save();
           }
@@ -372,6 +391,7 @@ export class GroupController {
               friend_mobile: user1Mobile || null,
               friend_id: user1 || null,
               user_mobile: mobile || null,
+              friend_name: allMembers[j].name || null,
             });
             await friend.save();
           }

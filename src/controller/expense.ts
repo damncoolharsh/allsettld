@@ -5,11 +5,6 @@ import ExpenseSplit, { ExpenseSplitType } from "../models/expenseSplit";
 import { Document, Types } from "mongoose";
 import Balance from "../models/balance";
 
-type ExpenseWithSplit = Document<unknown, {}, ExpenseType> &
-  ExpenseType & {
-    _id: Types.ObjectId;
-  } & { split?: Document<unknown, {}, ExpenseSplitType>[] };
-
 export class ExpenseController {
   async getExpenseByGroupId(req: Request, res: Response) {
     try {
@@ -18,21 +13,23 @@ export class ExpenseController {
       }
       const pageSize = 40;
       const pageNumber = parseInt(req.query.page ? req.query.toString() : "0");
-      const expenses: ExpenseWithSplit[] = await Expense.find({
+      const expenses = await Expense.find({
         group_id: req.query.id,
       })
         .skip(pageNumber)
+        .populate("paid_by")
         .limit(pageSize);
+      const finalExpenses = expenses.map((val) => val.toJSON());
       const total = await Expense.countDocuments();
 
-      for (let i = 0; i < expenses.length; i++) {
-        expenses[i].split = await ExpenseSplit.find({
+      for (let i = 0; i < finalExpenses.length; i++) {
+        finalExpenses[i].split = await ExpenseSplit.find({
           expense_id: expenses[i]._id,
-        });
+        }).populate("user_id");
       }
 
       res.json({
-        data: expenses,
+        data: finalExpenses,
         message: "Success",
         pagination: { page: pageNumber, pageSize: pageSize, total: total },
       });
@@ -54,6 +51,7 @@ export class ExpenseController {
         date: new Date(),
         group_id: groupId,
         paid_by: paidBy,
+        description: req.body.description,
       });
       let memberSplits = [];
 
@@ -65,59 +63,61 @@ export class ExpenseController {
           user_name: expenseDetails[i].name,
           user_mobile: expenseDetails[i].mobile,
         });
-        let balance = await Balance.findOne({
-          $and: [
-            {
-              group_id: groupId,
-            },
-            {
-              $or: [
-                {
-                  $and: [
-                    { payer_id: expenseDetails[i].id || "NA" },
-                    { payee_id: paidBy || "NA" },
-                  ],
-                },
-                {
-                  $and: [
-                    { payer_id: paidBy || "NA" },
-                    { payee_id: expenseDetails[i].id || "NA" },
-                  ],
-                },
-                {
-                  $and: [
-                    { payer_id: paidBy || "NA" },
-                    { payee_mobile: expenseDetails[i].mobile || "NA" },
-                  ],
-                },
-              ],
-            },
-          ],
-        });
-        if (!balance) {
-          balance = new Balance({
-            group_id: groupId,
-            payer_id: paidBy,
-            payee_id: expenseDetails[i].id,
-            payee_mobile: expenseDetails[i].mobile,
-            amount: expenseDetails[i].balance,
+        if (expenseDetails[i].id !== paidBy) {
+          let balance = await Balance.findOne({
+            $and: [
+              {
+                group_id: groupId,
+              },
+              {
+                $or: [
+                  {
+                    $and: [
+                      { payer_id: expenseDetails[i].id || "NA" },
+                      { payee_id: paidBy || "NA" },
+                    ],
+                  },
+                  {
+                    $and: [
+                      { payer_id: paidBy || "NA" },
+                      { payee_id: expenseDetails[i].id || "NA" },
+                    ],
+                  },
+                  {
+                    $and: [
+                      { payer_id: paidBy || "NA" },
+                      { payee_mobile: expenseDetails[i].mobile || "NA" },
+                    ],
+                  },
+                ],
+              },
+            ],
           });
-        } else {
-          if (expenseDetails[i].id) {
-            if (balance.payer_id === expenseDetails[i].id) {
-              balance.amount -= expenseDetails[i].balance;
-            } else {
-              balance.amount += expenseDetails[i].balance;
-            }
+          if (!balance) {
+            balance = new Balance({
+              group_id: groupId,
+              payer_id: paidBy,
+              payee_id: expenseDetails[i].id,
+              payee_mobile: expenseDetails[i].mobile,
+              amount: expenseDetails[i].balance,
+            });
           } else {
-            if (balance.payer_mobile === expenseDetails[i].mobile) {
-              balance.amount -= expenseDetails[i].balance;
+            if (expenseDetails[i].id) {
+              if (balance.payer_id === expenseDetails[i].id) {
+                balance.amount -= expenseDetails[i].balance;
+              } else {
+                balance.amount += expenseDetails[i].balance;
+              }
             } else {
-              balance.amount += expenseDetails[i].balance;
+              if (balance.payer_mobile === expenseDetails[i].mobile) {
+                balance.amount -= expenseDetails[i].balance;
+              } else {
+                balance.amount += expenseDetails[i].balance;
+              }
             }
           }
+          await balance.save();
         }
-        await balance.save();
         await split.save();
         memberSplits.push(split);
       }
