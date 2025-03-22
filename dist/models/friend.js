@@ -5,12 +5,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importDefault(require("mongoose"));
 const friendSchema = new mongoose_1.default.Schema({
-    name: { type: String, required: true },
-    mobileNumber: { type: String, required: true },
-    profilePic: { type: String },
-    balance: { type: Number, default: 0 },
-    userId: { type: String, required: true },
-    friendId: { type: String },
+    user_id: { type: mongoose_1.default.Schema.Types.ObjectId },
+    user_mobile: { type: String },
+    friend_id: { type: mongoose_1.default.Schema.Types.ObjectId },
+    friend_mobile: { type: String },
+    friend_name: { type: String },
+    created_at: { type: Date, default: Date.now },
 });
 const Friend = mongoose_1.default.model("Friend", friendSchema);
 exports.default = Friend;
