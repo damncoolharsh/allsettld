@@ -1,4 +1,27 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -19,6 +42,7 @@ const groupMember_1 = __importDefault(require("../models/groupMember"));
 const balance_1 = __importDefault(require("../models/balance"));
 const friend_1 = __importDefault(require("../models/friend"));
 const user_1 = __importDefault(require("../models/user"));
+const activity_1 = __importStar(require("../models/activity"));
 class GroupController {
     getGroups(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -160,6 +184,14 @@ class GroupController {
                     group_id: newGroup._id,
                     member_id: req.body.userId,
                 });
+                const activity = new activity_1.default({
+                    groupId: newGroup._id,
+                    userId: req.body.userId,
+                    activityType: activity_1.ActivityType.GROUP_CREATED,
+                    details: { groupName: newGroup.name },
+                    timestamp: new Date(),
+                });
+                yield activity.save();
                 yield newGroupMember.save();
                 yield newGroup.save();
                 res.json({ message: "Group created successfully", data: newGroup });
@@ -202,7 +234,7 @@ class GroupController {
     addMember(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const { groupId, memberId, name, mobile } = req.body;
+                const { groupId, memberId, name, mobile, userId } = req.body;
                 const group = yield group_1.default.findOne({ _id: groupId });
                 if (!group) {
                     res.status(400).json({ message: "Group not found" });
@@ -296,6 +328,16 @@ class GroupController {
                         yield friend.save();
                     }
                 }
+                const activity = new activity_1.default({
+                    groupId: group._id,
+                    userId: userId,
+                    activityType: activity_1.ActivityType.MEMBER_ADDED,
+                    details: {
+                        groupName: group.name,
+                        memberName: name,
+                    },
+                });
+                yield activity.save();
                 res.json({ message: "Member added successfully" });
             }
             catch (err) {
@@ -307,7 +349,7 @@ class GroupController {
     bulkAddMember(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const { groupId, members } = req.body;
+                const { groupId, members, userId } = req.body;
                 const group = yield group_1.default.findOne({ _id: groupId });
                 if (!group) {
                     res.status(400).json({ message: "Group not found" });
@@ -329,6 +371,10 @@ class GroupController {
                     });
                     if (alreadyMember) {
                         continue;
+                    }
+                    const user = yield user_1.default.findOne({ mobile: member.mobile });
+                    if (user) {
+                        member.id = user._id;
                     }
                     if (member.id) {
                         newGroupMembers.push(new groupMember_1.default({
@@ -404,12 +450,23 @@ class GroupController {
                                 friend_mobile: user1Mobile || null,
                                 friend_id: user1 || null,
                                 user_mobile: mobile || null,
-                                friend_name: allMembers[j].name || null,
+                                friend_name: allMembers[i].name || null,
                             });
                             yield friend.save();
                         }
                     }
                 }
+                const newMembers = allMembers.filter((val) => members.find((member) => { var _a; return member.id === ((_a = val.member_id) === null || _a === void 0 ? void 0 : _a._id) || member.mobile === val.mobile; }));
+                const activity = new activity_1.default({
+                    groupId: group._id,
+                    userId: userId,
+                    activityType: activity_1.ActivityType.MEMBER_ADDED,
+                    details: {
+                        groupName: group.name,
+                        members: newMembers.map((val) => val.name),
+                    },
+                });
+                yield activity.save();
                 res.json({ message: "Members added successfully" });
             }
             catch (err) {
@@ -433,6 +490,15 @@ class GroupController {
                 else {
                     yield groupMember_1.default.deleteOne({ group_id: groupId, mobile: mobile });
                 }
+                const activity = new activity_1.default({
+                    groupId: group._id,
+                    userId: req.body.userId,
+                    activityType: activity_1.ActivityType.MEMBER_REMOVED,
+                    details: {
+                        groupName: group.name,
+                    },
+                });
+                yield activity.save();
                 res.json({ message: "Member removed successfully" });
             }
             catch (err) {

@@ -27,4 +27,5 @@ router.post("/updateExpense", auth_1.verifyToken, [
         .not()
         .isEmpty(),
 ], expenseController.updateExpense);
+router.post("/settleAmount", auth_1.verifyToken, expenseController.settleAmount);
 exports.default = router;

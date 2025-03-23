@@ -1,4 +1,27 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -17,6 +40,7 @@ const expense_1 = __importDefault(require("../models/expense"));
 const express_validator_1 = require("express-validator");
 const expenseSplit_1 = __importDefault(require("../models/expenseSplit"));
 const balance_1 = __importDefault(require("../models/balance"));
+const activity_1 = __importStar(require("../models/activity"));
 class ExpenseController {
     getExpenseByGroupId(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -137,6 +161,18 @@ class ExpenseController {
                     yield split.save();
                     memberSplits.push(split);
                 }
+                const activity = new activity_1.default({
+                    groupId: groupId,
+                    userId: paidBy,
+                    activityType: activity_1.ActivityType.EXPENSE_ADDED,
+                    details: {
+                        expenseAmount: amount,
+                        expenseSplit: memberSplits,
+                        expenseDescription: req.body.description,
+                    },
+                    timestamp: new Date(),
+                });
+                yield activity.save();
                 yield newExpense.save();
                 res.json({
                     data: Object.assign(Object.assign({}, newExpense.toJSON()), { split: memberSplits }),
@@ -146,6 +182,77 @@ class ExpenseController {
             catch (err) {
                 console.log("🚀 ~ file: expense.ts:router.post ~ err:", err);
                 res.status(400).json({ message: "Something went wrong" });
+            }
+        });
+    }
+    settleAmount(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { groupId, amount, userId, payee_id, payee_mobile, payeeName } = req.body;
+                const balance = yield balance_1.default.findOne({
+                    $and: [
+                        { group_id: groupId },
+                        {
+                            $or: [{ payer_id: userId || "NA" }, { payee_id: userId || "NA" }],
+                        },
+                        {
+                            $or: [
+                                {
+                                    $and: [
+                                        { payer_id: userId || "NA" },
+                                        { payee_id: payee_id || "NA" },
+                                    ],
+                                },
+                                {
+                                    $and: [
+                                        { payer_id: userId || "NA" },
+                                        { payee_mobile: payee_mobile || "NA" },
+                                    ],
+                                },
+                                {
+                                    $and: [
+                                        { payer_id: payee_id || "NA" },
+                                        { payee_id: userId || "NA" },
+                                    ],
+                                },
+                                {
+                                    $and: [
+                                        { payer_mobile: payee_mobile || "NA" },
+                                        { payee_id: userId || "NA" },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                });
+                if (!balance) {
+                    return res.status(400).json({ message: "Balance not found" });
+                }
+                let newAmount = balance.amount;
+                if (balance.payer_id === userId) {
+                    newAmount = balance.amount + Number(amount);
+                }
+                else {
+                    newAmount = balance.amount - Number(amount);
+                }
+                balance.amount = newAmount;
+                const acitivity = new activity_1.default({
+                    groupId: balance.group_id,
+                    userId: userId,
+                    activityType: activity_1.ActivityType.SETTLEMENT_PAID,
+                    details: {
+                        settlementAmount: amount,
+                        paidTo: payee_id,
+                        memberName: payeeName,
+                    },
+                });
+                yield acitivity.save();
+                yield balance.save();
+                res.json({ message: "Amount settled successfully" });
+            }
+            catch (err) {
+                console.log("🚀 ~ file: expense.ts:router.post ~ err:", err);
+                res.status(400).json({ message: "Something went wrong", error: true });
             }
         });
     }
