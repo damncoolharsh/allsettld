@@ -4,6 +4,7 @@ import { validationResult } from "express-validator";
 import ExpenseSplit, { ExpenseSplitType } from "../models/expenseSplit";
 import { Document, Types } from "mongoose";
 import Balance from "../models/balance";
+import Activity, { ActivityType } from "../models/activity";
 
 export class ExpenseController {
   async getExpenseByGroupId(req: Request, res: Response) {
@@ -121,6 +122,18 @@ export class ExpenseController {
         await split.save();
         memberSplits.push(split);
       }
+      const activity = new Activity({
+        groupId: groupId,
+        userId: paidBy,
+        activityType: ActivityType.EXPENSE_ADDED,
+        details: {
+          expenseAmount: amount,
+          expenseSplit: memberSplits,
+          expenseDescription: req.body.description,
+        },
+        timestamp: new Date(),
+      });
+      await activity.save();
       await newExpense.save();
       res.json({
         data: { ...newExpense.toJSON(), split: memberSplits },
@@ -129,6 +142,75 @@ export class ExpenseController {
     } catch (err) {
       console.log("🚀 ~ file: expense.ts:router.post ~ err:", err);
       res.status(400).json({ message: "Something went wrong" });
+    }
+  }
+
+  async settleAmount(req: Request, res: Response) {
+    try {
+      const { groupId, amount, userId, payee_id, payee_mobile, payeeName } =
+        req.body;
+      const balance = await Balance.findOne({
+        $and: [
+          { group_id: groupId },
+          {
+            $or: [{ payer_id: userId || "NA" }, { payee_id: userId || "NA" }],
+          },
+          {
+            $or: [
+              {
+                $and: [
+                  { payer_id: userId || "NA" },
+                  { payee_id: payee_id || "NA" },
+                ],
+              },
+              {
+                $and: [
+                  { payer_id: userId || "NA" },
+                  { payee_mobile: payee_mobile || "NA" },
+                ],
+              },
+              {
+                $and: [
+                  { payer_id: payee_id || "NA" },
+                  { payee_id: userId || "NA" },
+                ],
+              },
+              {
+                $and: [
+                  { payer_mobile: payee_mobile || "NA" },
+                  { payee_id: userId || "NA" },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      if (!balance) {
+        return res.status(400).json({ message: "Balance not found" });
+      }
+      let newAmount = balance.amount;
+      if (balance.payer_id === userId) {
+        newAmount = balance.amount + Number(amount);
+      } else {
+        newAmount = balance.amount - Number(amount);
+      }
+      balance.amount = newAmount;
+      const acitivity = new Activity({
+        groupId: balance.group_id,
+        userId: userId,
+        activityType: ActivityType.SETTLEMENT_PAID,
+        details: {
+          settlementAmount: amount,
+          paidTo: payee_id,
+          memberName: payeeName,
+        },
+      });
+      await acitivity.save();
+      await balance.save();
+      res.json({ message: "Amount settled successfully" });
+    } catch (err) {
+      console.log("🚀 ~ file: expense.ts:router.post ~ err:", err);
+      res.status(400).json({ message: "Something went wrong", error: true });
     }
   }
 

@@ -37,4 +37,6 @@ router.post(
   expenseController.updateExpense
 );
 
+router.post("/settleAmount", verifyToken, expenseController.settleAmount);
+
 export default router;

@@ -5,6 +5,7 @@ import GroupMember, { GroupMemberType } from "../models/groupMember";
 import Balance from "../models/balance";
 import Friend from "../models/friend";
 import User from "../models/user";
+import Activity, { ActivityType } from "../models/activity";
 
 interface BalanceInfoType {
   balance?: number;
@@ -149,6 +150,14 @@ export class GroupController {
         group_id: newGroup._id,
         member_id: req.body.userId,
       });
+      const activity = new Activity({
+        groupId: newGroup._id,
+        userId: req.body.userId,
+        activityType: ActivityType.GROUP_CREATED,
+        details: { groupName: newGroup.name },
+        timestamp: new Date(),
+      });
+      await activity.save();
       await newGroupMember.save();
       await newGroup.save();
       res.json({ message: "Group created successfully", data: newGroup });
@@ -184,7 +193,7 @@ export class GroupController {
 
   async addMember(req: Request, res: Response) {
     try {
-      const { groupId, memberId, name, mobile } = req.body;
+      const { groupId, memberId, name, mobile, userId } = req.body;
       const group = await Group.findOne({ _id: groupId });
       if (!group) {
         res.status(400).json({ message: "Group not found" });
@@ -280,6 +289,16 @@ export class GroupController {
           await friend.save();
         }
       }
+      const activity = new Activity({
+        groupId: group._id,
+        userId: userId,
+        activityType: ActivityType.MEMBER_ADDED,
+        details: {
+          groupName: group.name,
+          memberName: name,
+        },
+      });
+      await activity.save();
       res.json({ message: "Member added successfully" });
     } catch (err) {
       console.log("🚀 ~ file: group.ts:router.post ~ err:", err);
@@ -289,7 +308,7 @@ export class GroupController {
 
   async bulkAddMember(req: Request, res: Response) {
     try {
-      const { groupId, members } = req.body;
+      const { groupId, members, userId } = req.body;
       const group = await Group.findOne({ _id: groupId });
       if (!group) {
         res.status(400).json({ message: "Group not found" });
@@ -311,6 +330,10 @@ export class GroupController {
         });
         if (alreadyMember) {
           continue;
+        }
+        const user = await User.findOne({ mobile: member.mobile });
+        if (user) {
+          member.id = user._id;
         }
         if (member.id) {
           newGroupMembers.push(
@@ -391,12 +414,28 @@ export class GroupController {
               friend_mobile: user1Mobile || null,
               friend_id: user1 || null,
               user_mobile: mobile || null,
-              friend_name: allMembers[j].name || null,
+              friend_name: allMembers[i].name || null,
             });
             await friend.save();
           }
         }
       }
+      const newMembers = allMembers.filter((val) =>
+        members.find(
+          (member: any) =>
+            member.id === val.member_id?._id || member.mobile === val.mobile
+        )
+      );
+      const activity = new Activity({
+        groupId: group._id,
+        userId: userId,
+        activityType: ActivityType.MEMBER_ADDED,
+        details: {
+          groupName: group.name,
+          members: newMembers.map((val) => val.name),
+        },
+      });
+      await activity.save();
       res.json({ message: "Members added successfully" });
     } catch (err) {
       console.log("🚀 ~ file: group.ts:router.post ~ err:", err);
@@ -417,6 +456,15 @@ export class GroupController {
       } else {
         await GroupMember.deleteOne({ group_id: groupId, mobile: mobile });
       }
+      const activity = new Activity({
+        groupId: group._id,
+        userId: req.body.userId,
+        activityType: ActivityType.MEMBER_REMOVED,
+        details: {
+          groupName: group.name,
+        },
+      });
+      await activity.save();
       res.json({ message: "Member removed successfully" });
     } catch (err) {
       console.log("🚀 ~ file: group.ts:router.post ~ err:", err);

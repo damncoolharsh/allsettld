@@ -98,7 +98,6 @@ export class FriendController {
         friend_mobile: mobile,
         friend_name: name,
       });
-
       await friend.save();
       res.json({ message: "Friend added successfully", data: friend });
     } catch (err) {
