@@ -322,8 +322,8 @@ export class GroupController {
             { group_id: groupId },
             {
               $or: [
-                { member_id: member.id || null },
-                { mobile: member.mobile || "NA" },
+                ...(member.id ? [{ member_id: member.id }] : []),
+                ...(member.mobile ? [{ mobile: member.mobile }] : []),
               ],
             },
           ],

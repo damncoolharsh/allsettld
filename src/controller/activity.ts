@@ -26,7 +26,9 @@ export class ActivityController {
         const groupIds = groups.map((val) => val.group_id._id);
         const activities = await Activity.find({
           groupId: { $in: groupIds },
-        }).populate("groupId");
+        })
+          .populate("groupId")
+          .populate("userId");
         res.json({ data: activities });
         return;
       } else {
