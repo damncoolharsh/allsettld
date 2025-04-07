@@ -42,4 +42,6 @@ router.post(
 
 router.get("/getUserData", verifyToken, userController.getUserData);
 
+router.get("/summary", verifyToken, userController.getUserSummary);
+
 export default router;

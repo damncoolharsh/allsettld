@@ -28,7 +28,8 @@ export class ActivityController {
           groupId: { $in: groupIds },
         })
           .populate("groupId")
-          .populate("userId");
+          .populate("userId")
+          .sort({ timestamp: -1 });
         res.json({ data: activities });
         return;
       } else {

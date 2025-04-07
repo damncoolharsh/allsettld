@@ -15,49 +15,146 @@ interface BalanceInfoType {
 type GroupWithBalance = GroupMemberType & BalanceInfoType;
 
 export class GroupController {
-  async getGroups(req: Request, res: Response) {
+  getGroups = async (req: Request, res: Response) => {
     try {
-      const id = req.query?.id as string;
-      if (!id) {
+      const userId = req.query?.id as string; // Renamed for clarity
+      if (!userId) {
         return res.status(400).json({ message: "User id is required" });
       }
 
       if (req.query?.groupId) {
-        const group = await Group.findOne({ _id: req.query.groupId });
+        // Fetch single group details including members with balance
+        const groupId = req.query.groupId as string;
+        const group = await Group.findOne({ _id: groupId });
         if (!group) {
           return res.status(400).json({ message: "Group not found" });
         }
-        return res.json({ data: group });
+        const members = await this._getGroupMembersWithBalance(groupId, userId);
+        const result = { ...group.toJSON(), members };
+        return res.json({ data: result });
       } else {
+        // Fetch list of groups the user is part of, including members with balance for each
         const pageSize = 20;
         const pageNumber = parseInt(
-          req.query.page ? req.query.toString() : "0"
+          req.query.page ? req.query.page.toString() : "0"
         );
-        const groups = await GroupMember.find({
-          member_id: id,
-        })
-          .populate("group_id")
-          .skip(pageNumber)
-          .limit(pageSize);
-        const total = await GroupMember.find({
-          member_id: id,
-        }).countDocuments();
+
+        // Find GroupMember entries to get the group IDs the user belongs to
+        const groupMemberships = await GroupMember.find({ member_id: userId })
+          .select("group_id") // Only need group_id
+          .lean(); // Use lean for performance
+
+        const groupIds = groupMemberships.map((gm) => gm.group_id);
+
+        // Fetch the actual groups with pagination
+        const groupsQuery = Group.find({ _id: { $in: groupIds } });
+        const total = await Group.countDocuments({ _id: { $in: groupIds } });
+        const groupsData = await groupsQuery
+          .skip(pageNumber * pageSize)
+          .limit(pageSize)
+          .lean(); // Use lean for performance
+
+        // Enhance each group with its members and their balances
+        const groupsWithMembers = [];
+        for (const group of groupsData) {
+          const members = await this._getGroupMembersWithBalance(
+            group._id.toString(),
+            userId
+          );
+          groupsWithMembers.push({ ...group, members });
+        }
 
         res.json({
-          data: groups,
+          data: groupsWithMembers,
           pagination: { page: pageNumber, pageSize: pageSize, total: total },
         });
       }
     } catch (err) {
-      console.log("🚀 ~ file: group.ts:router.get ~ err:", err);
+      console.log("🚀 ~ file: group.ts:getGroups ~ err:", err);
       res.status(500).json({ message: "Internal server error" });
     }
+  };
+
+  async _getGroupMembersWithBalance(
+    groupId: string,
+    userId: string
+  ): Promise<GroupWithBalance[]> {
+    const membersData = await GroupMember.find({
+      group_id: groupId,
+    }).populate("member_id");
+    let members: GroupWithBalance[] = membersData.map((val) => val.toJSON());
+
+    for (let i = 0; i < members.length; i++) {
+      if (members[i].member_id) {
+        const balance = await Balance.findOne({
+          $and: [
+            { group_id: groupId },
+            {
+              $or: [
+                {
+                  $and: [
+                    { payer_id: members[i].member_id?._id || "NA" },
+                    { payee_id: userId || "NA" },
+                  ],
+                },
+                {
+                  $and: [
+                    { payer_id: userId || "NA" },
+                    { payee_id: members[i].member_id?._id || "NA" },
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+        let amount = balance?.amount || 0;
+        if (balance?.payer_id !== members[i].member_id?._id.toString()) {
+          amount = amount * -1;
+        }
+        members[i].balance = amount;
+      } else {
+        // Handle non-registered members (identified by mobile)
+        const balance = await Balance.findOne({
+          $and: [
+            { group_id: groupId },
+            {
+              $or: [
+                // Case 1: User owes the non-registered member
+                {
+                  $and: [
+                    { payer_id: userId || "NA" },
+                    { payee_mobile: members[i].mobile || "NA" },
+                  ],
+                },
+                // Case 2: Non-registered member owes the user (less common, but possible if manually created)
+                {
+                  $and: [
+                    { payer_mobile: members[i].mobile || "NA" },
+                    { payee_id: userId || "NA" },
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+
+        let amount = balance?.amount || 0;
+        // If the balance record shows the non-registered member as the payee, it means the user owes them, so the balance is negative from the user's perspective.
+        if (balance?.payee_mobile === members[i].mobile) {
+          amount = amount * -1;
+        }
+        // If the balance record shows the non-registered member as the payer, it means they owe the user, so the balance is positive.
+        // No change needed for amount in this case as it's already positive.
+        members[i].balance = amount;
+      }
+    }
+    return members;
   }
 
-  async getGroupMembers(req: Request, res: Response) {
+  getGroupMembers = async (req: Request, res: Response) => {
     try {
-      const id = req.query?.id;
-      const userId = req.query?.userId;
+      const id = req.query?.id as string;
+      const userId = req.query?.userId as string;
       if (!id) {
         return res.status(400).json({ message: "Group id is required" });
       }
@@ -68,69 +165,15 @@ export class GroupController {
       if (!group) {
         return res.status(400).json({ message: "Group not found" });
       }
-      const membersData = await GroupMember.find({
-        group_id: id,
-      }).populate("member_id");
-      let members: GroupWithBalance[] = membersData.map((val) => val.toJSON());
-      for (let i = 0; i < members.length; i++) {
-        if (members[i].member_id) {
-          const balance = await Balance.findOne({
-            $and: [
-              { group_id: id },
-              {
-                $or: [
-                  {
-                    $and: [
-                      { payer_id: members[i].member_id?._id || "NA" },
-                      { payee_id: userId || "NA" },
-                    ],
-                  },
-                  {
-                    $and: [
-                      { payer_id: userId || "NA" },
-                      { payee_id: members[i].member_id?._id || "NA" },
-                    ],
-                  },
-                ],
-              },
-            ],
-          });
-          let amount = balance?.amount || 0;
-          if (balance?.payer_id !== members[i].member_id?._id.toString()) {
-            amount = amount * -1;
-          }
-          members[i].balance = amount;
-        } else {
-          const balance = await Balance.findOne({
-            $and: [
-              { group_id: id },
-              {
-                $or: [
-                  {
-                    $and: [
-                      { payer_id: userId || "NA" },
-                      { payee_mobile: members[i].mobile || "NA" },
-                    ],
-                  },
-                ],
-              },
-            ],
-          });
 
-          let amount = balance?.amount || 0;
-          if (balance?.payee_mobile === members[i].mobile) {
-            amount = amount * -1;
-          }
-          members[i].balance = amount;
-        }
-      }
+      const members = await this._getGroupMembersWithBalance(id, userId);
       const result = { ...group.toJSON(), members };
       res.json({ data: result });
     } catch (err) {
-      console.log("🚀 ~ file: group.ts:router.get ~ err:", err);
+      console.log("🚀 ~ file: group.ts:getGroupMembers ~ err:", err);
       res.status(500).json({ message: "Internal server error" });
     }
-  }
+  };
 
   async createGroup(req: Request, res: Response) {
     const errors = validationResult(req);
