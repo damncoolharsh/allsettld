@@ -29,4 +29,5 @@ router.post("/sendOtp", userController.sendOtp);
 router.post("/verifyOtp", userController.verifyOtp);
 router.post("/updateUser", upload.single("profilePic"), auth_1.verifyToken, [(0, express_validator_1.check)("_id", "Id is required").isString()], userController.updateUser);
 router.get("/getUserData", auth_1.verifyToken, userController.getUserData);
+router.get("/summary", auth_1.verifyToken, userController.getUserSummary);
 exports.default = router;

@@ -41,7 +41,10 @@ class ActivityController {
                     const groupIds = groups.map((val) => val.group_id._id);
                     const activities = yield activity_1.default.find({
                         groupId: { $in: groupIds },
-                    }).populate("groupId");
+                    })
+                        .populate("groupId")
+                        .populate("userId")
+                        .sort({ timestamp: -1 });
                     res.json({ data: activities });
                     return;
                 }

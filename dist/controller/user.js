@@ -179,5 +179,56 @@ class UserController {
             }
         });
     }
+    getUserSummary(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const userId = req.query.id; // Assuming verifyToken middleware adds userId to req
+                if (!userId) {
+                    return res.status(401).json({ message: "User not authenticated" });
+                }
+                // Find all balances where the user is either the payer or the payee
+                const userBalances = yield balance_1.default.find({
+                    $or: [{ payer_id: userId }, { payee_id: userId }],
+                });
+                let totalOwes = 0; // Amount user needs to pay others
+                let totalOwed = 0; // Amount others need to pay user
+                console.log("🚀 ~ UserController ~ userBalances.forEach ~ userBalances:", userBalances);
+                userBalances.forEach((balance) => {
+                    if (balance.payer_id.toString() === userId.toString()) {
+                        // User is the payer
+                        if (balance.amount > 0) {
+                            // Payer owes payee (user owes)
+                            totalOwes += balance.amount;
+                        }
+                        else {
+                            // Payee owes payer (user is owed) - amount is negative
+                            totalOwed += Math.abs(balance.amount);
+                        }
+                    }
+                    else {
+                        // User is the payee
+                        if (balance.amount > 0) {
+                            // Payer owes payee (user is owed)
+                            totalOwed += balance.amount;
+                        }
+                        else {
+                            // Payee owes payer (user owes) - amount is negative
+                            totalOwes += Math.abs(balance.amount);
+                        }
+                    }
+                });
+                res.json({
+                    data: {
+                        totalOwes: totalOwes,
+                        totalOwed: totalOwed,
+                    },
+                });
+            }
+            catch (err) {
+                console.error("Error fetching user summary:", err);
+                res.status(500).json({ message: "Something went wrong" });
+            }
+        });
+    }
 }
 exports.UserController = UserController;

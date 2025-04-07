@@ -44,48 +44,60 @@ const friend_1 = __importDefault(require("../models/friend"));
 const user_1 = __importDefault(require("../models/user"));
 const activity_1 = __importStar(require("../models/activity"));
 class GroupController {
-    getGroups(req, res) {
-        return __awaiter(this, void 0, void 0, function* () {
+    constructor() {
+        this.getGroups = (req, res) => __awaiter(this, void 0, void 0, function* () {
             var _a, _b;
             try {
-                const id = (_a = req.query) === null || _a === void 0 ? void 0 : _a.id;
-                if (!id) {
+                const userId = (_a = req.query) === null || _a === void 0 ? void 0 : _a.id; // Renamed for clarity
+                if (!userId) {
                     return res.status(400).json({ message: "User id is required" });
                 }
                 if ((_b = req.query) === null || _b === void 0 ? void 0 : _b.groupId) {
-                    const group = yield group_1.default.findOne({ _id: req.query.groupId });
+                    // Fetch single group details including members with balance
+                    const groupId = req.query.groupId;
+                    const group = yield group_1.default.findOne({ _id: groupId });
                     if (!group) {
                         return res.status(400).json({ message: "Group not found" });
                     }
-                    return res.json({ data: group });
+                    const members = yield this._getGroupMembersWithBalance(groupId, userId);
+                    const result = Object.assign(Object.assign({}, group.toJSON()), { members });
+                    return res.json({ data: result });
                 }
                 else {
+                    // Fetch list of groups the user is part of, including members with balance for each
                     const pageSize = 20;
-                    const pageNumber = parseInt(req.query.page ? req.query.toString() : "0");
-                    const groups = yield groupMember_1.default.find({
-                        member_id: id,
-                    })
-                        .populate("group_id")
-                        .skip(pageNumber)
-                        .limit(pageSize);
-                    const total = yield groupMember_1.default.find({
-                        member_id: id,
-                    }).countDocuments();
+                    const pageNumber = parseInt(req.query.page ? req.query.page.toString() : "0");
+                    // Find GroupMember entries to get the group IDs the user belongs to
+                    const groupMemberships = yield groupMember_1.default.find({ member_id: userId })
+                        .select("group_id") // Only need group_id
+                        .lean(); // Use lean for performance
+                    const groupIds = groupMemberships.map((gm) => gm.group_id);
+                    // Fetch the actual groups with pagination
+                    const groupsQuery = group_1.default.find({ _id: { $in: groupIds } });
+                    const total = yield group_1.default.countDocuments({ _id: { $in: groupIds } });
+                    const groupsData = yield groupsQuery
+                        .skip(pageNumber * pageSize)
+                        .limit(pageSize)
+                        .lean(); // Use lean for performance
+                    // Enhance each group with its members and their balances
+                    const groupsWithMembers = [];
+                    for (const group of groupsData) {
+                        const members = yield this._getGroupMembersWithBalance(group._id.toString(), userId);
+                        groupsWithMembers.push(Object.assign(Object.assign({}, group), { members }));
+                    }
                     res.json({
-                        data: groups,
+                        data: groupsWithMembers,
                         pagination: { page: pageNumber, pageSize: pageSize, total: total },
                     });
                 }
             }
             catch (err) {
-                console.log("🚀 ~ file: group.ts:router.get ~ err:", err);
+                console.log("🚀 ~ file: group.ts:getGroups ~ err:", err);
                 res.status(500).json({ message: "Internal server error" });
             }
         });
-    }
-    getGroupMembers(req, res) {
-        return __awaiter(this, void 0, void 0, function* () {
-            var _a, _b, _c, _d, _e;
+        this.getGroupMembers = (req, res) => __awaiter(this, void 0, void 0, function* () {
+            var _a, _b;
             try {
                 const id = (_a = req.query) === null || _a === void 0 ? void 0 : _a.id;
                 const userId = (_b = req.query) === null || _b === void 0 ? void 0 : _b.userId;
@@ -99,69 +111,88 @@ class GroupController {
                 if (!group) {
                     return res.status(400).json({ message: "Group not found" });
                 }
-                const membersData = yield groupMember_1.default.find({
-                    group_id: id,
-                }).populate("member_id");
-                let members = membersData.map((val) => val.toJSON());
-                for (let i = 0; i < members.length; i++) {
-                    if (members[i].member_id) {
-                        const balance = yield balance_1.default.findOne({
-                            $and: [
-                                { group_id: id },
-                                {
-                                    $or: [
-                                        {
-                                            $and: [
-                                                { payer_id: ((_c = members[i].member_id) === null || _c === void 0 ? void 0 : _c._id) || "NA" },
-                                                { payee_id: userId || "NA" },
-                                            ],
-                                        },
-                                        {
-                                            $and: [
-                                                { payer_id: userId || "NA" },
-                                                { payee_id: ((_d = members[i].member_id) === null || _d === void 0 ? void 0 : _d._id) || "NA" },
-                                            ],
-                                        },
-                                    ],
-                                },
-                            ],
-                        });
-                        let amount = (balance === null || balance === void 0 ? void 0 : balance.amount) || 0;
-                        if ((balance === null || balance === void 0 ? void 0 : balance.payer_id) !== ((_e = members[i].member_id) === null || _e === void 0 ? void 0 : _e._id.toString())) {
-                            amount = amount * -1;
-                        }
-                        members[i].balance = amount;
-                    }
-                    else {
-                        const balance = yield balance_1.default.findOne({
-                            $and: [
-                                { group_id: id },
-                                {
-                                    $or: [
-                                        {
-                                            $and: [
-                                                { payer_id: userId || "NA" },
-                                                { payee_mobile: members[i].mobile || "NA" },
-                                            ],
-                                        },
-                                    ],
-                                },
-                            ],
-                        });
-                        let amount = (balance === null || balance === void 0 ? void 0 : balance.amount) || 0;
-                        if ((balance === null || balance === void 0 ? void 0 : balance.payee_mobile) === members[i].mobile) {
-                            amount = amount * -1;
-                        }
-                        members[i].balance = amount;
-                    }
-                }
+                const members = yield this._getGroupMembersWithBalance(id, userId);
                 const result = Object.assign(Object.assign({}, group.toJSON()), { members });
                 res.json({ data: result });
             }
             catch (err) {
-                console.log("🚀 ~ file: group.ts:router.get ~ err:", err);
+                console.log("🚀 ~ file: group.ts:getGroupMembers ~ err:", err);
                 res.status(500).json({ message: "Internal server error" });
             }
+        });
+    }
+    _getGroupMembersWithBalance(groupId, userId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b, _c;
+            const membersData = yield groupMember_1.default.find({
+                group_id: groupId,
+            }).populate("member_id");
+            let members = membersData.map((val) => val.toJSON());
+            for (let i = 0; i < members.length; i++) {
+                if (members[i].member_id) {
+                    const balance = yield balance_1.default.findOne({
+                        $and: [
+                            { group_id: groupId },
+                            {
+                                $or: [
+                                    {
+                                        $and: [
+                                            { payer_id: ((_a = members[i].member_id) === null || _a === void 0 ? void 0 : _a._id) || "NA" },
+                                            { payee_id: userId || "NA" },
+                                        ],
+                                    },
+                                    {
+                                        $and: [
+                                            { payer_id: userId || "NA" },
+                                            { payee_id: ((_b = members[i].member_id) === null || _b === void 0 ? void 0 : _b._id) || "NA" },
+                                        ],
+                                    },
+                                ],
+                            },
+                        ],
+                    });
+                    let amount = (balance === null || balance === void 0 ? void 0 : balance.amount) || 0;
+                    if ((balance === null || balance === void 0 ? void 0 : balance.payer_id) !== ((_c = members[i].member_id) === null || _c === void 0 ? void 0 : _c._id.toString())) {
+                        amount = amount * -1;
+                    }
+                    members[i].balance = amount;
+                }
+                else {
+                    // Handle non-registered members (identified by mobile)
+                    const balance = yield balance_1.default.findOne({
+                        $and: [
+                            { group_id: groupId },
+                            {
+                                $or: [
+                                    // Case 1: User owes the non-registered member
+                                    {
+                                        $and: [
+                                            { payer_id: userId || "NA" },
+                                            { payee_mobile: members[i].mobile || "NA" },
+                                        ],
+                                    },
+                                    // Case 2: Non-registered member owes the user (less common, but possible if manually created)
+                                    {
+                                        $and: [
+                                            { payer_mobile: members[i].mobile || "NA" },
+                                            { payee_id: userId || "NA" },
+                                        ],
+                                    },
+                                ],
+                            },
+                        ],
+                    });
+                    let amount = (balance === null || balance === void 0 ? void 0 : balance.amount) || 0;
+                    // If the balance record shows the non-registered member as the payee, it means the user owes them, so the balance is negative from the user's perspective.
+                    if ((balance === null || balance === void 0 ? void 0 : balance.payee_mobile) === members[i].mobile) {
+                        amount = amount * -1;
+                    }
+                    // If the balance record shows the non-registered member as the payer, it means they owe the user, so the balance is positive.
+                    // No change needed for amount in this case as it's already positive.
+                    members[i].balance = amount;
+                }
+            }
+            return members;
         });
     }
     createGroup(req, res) {
@@ -363,8 +394,8 @@ class GroupController {
                             { group_id: groupId },
                             {
                                 $or: [
-                                    { member_id: member.id || null },
-                                    { mobile: member.mobile || "NA" },
+                                    ...(member.id ? [{ member_id: member.id }] : []),
+                                    ...(member.mobile ? [{ mobile: member.mobile }] : []),
                                 ],
                             },
                         ],
