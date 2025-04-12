@@ -15,10 +15,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importDefault(require("mongoose"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const userSchema = new mongoose_1.default.Schema({
-    email: { type: String, required: true, unique: true },
+    email: { type: String, unique: true },
     mobile: { type: String, required: true, unique: true },
-    password: { type: String, required: true, select: false },
-    name: { type: String, required: true },
+    password: { type: String, select: false },
+    name: { type: String },
     profilePic: { type: String },
     phoneOtp: { type: String },
 });

@@ -422,7 +422,7 @@ class GroupController {
                         }));
                     }
                 }
-                yield groupMember_1.default.insertMany(newGroupMembers);
+                const newMembers = yield groupMember_1.default.insertMany(newGroupMembers);
                 const allMembers = yield groupMember_1.default.find({ group_id: groupId });
                 for (let i = 0; i < allMembers.length; i++) {
                     for (let j = i + 1; j < allMembers.length; j++) {
@@ -487,7 +487,6 @@ class GroupController {
                         }
                     }
                 }
-                const newMembers = allMembers.filter((val) => members.find((member) => { var _a; return member.id === ((_a = val.member_id) === null || _a === void 0 ? void 0 : _a._id) || member.mobile === val.mobile; }));
                 const activity = new activity_1.default({
                     groupId: group._id,
                     userId: userId,

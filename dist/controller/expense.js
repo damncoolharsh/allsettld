@@ -93,7 +93,7 @@ class ExpenseController {
                 let memberSplits = [];
                 for (let i = 0; i < expenseDetails.length; i++) {
                     const split = new expenseSplit_1.default({
-                        amount: expenseDetails[i].balance,
+                        amount: Number(expenseDetails[i].balance).toFixed(3),
                         expense_id: newExpense._id,
                         user_id: expenseDetails[i].id,
                         user_name: expenseDetails[i].name,
