@@ -396,7 +396,7 @@ export class GroupController {
           );
         }
       }
-      await GroupMember.insertMany(newGroupMembers);
+      const newMembers = await GroupMember.insertMany(newGroupMembers);
       const allMembers = await GroupMember.find({ group_id: groupId });
       for (let i = 0; i < allMembers.length; i++) {
         for (let j = i + 1; j < allMembers.length; j++) {
@@ -463,12 +463,6 @@ export class GroupController {
           }
         }
       }
-      const newMembers = allMembers.filter((val) =>
-        members.find(
-          (member: any) =>
-            member.id === val.member_id?._id || member.mobile === val.mobile
-        )
-      );
       const activity = new Activity({
         groupId: group._id,
         userId: userId,

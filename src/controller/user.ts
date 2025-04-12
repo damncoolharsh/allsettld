@@ -81,44 +81,50 @@ export class UserController {
 
   async sendOtp(req: Request, res: Response) {
     try {
-      const { mobile } = req.body;
-      let user = await User.findOne({ mobile: mobile });
+      const { mobileNumber } = req.body;
+      let user = await User.findOne({ mobile: mobileNumber });
       if (!user) {
-        return res.status(400).json({ message: "User not found" });
+        user = new User({ mobile: mobileNumber });
+        await user.save();
       }
 
       const otp = generateOTP(6);
       user.phoneOtp = otp;
       await user.save();
-      sendSms("91" + mobile, `#allsettld, Your OTP is ${otp}`);
-      res.json({ message: "OTP sent successfully" });
+      sendSms("91" + mobileNumber, `#allsettld, Your OTP is ${otp}`);
+      res.json({ message: "OTP sent successfully", success: true });
     } catch (err) {
       console.log("🚀 ~ file: user.ts:router.post ~ err:", err);
-      res.status(400).json({ message: "Something went wrong" });
+      res.status(400).json({ message: "Something went wrong", success: false });
     }
   }
 
   async verifyOtp(req: Request, res: Response) {
     try {
-      const { mobile, otp } = req.body;
-      let user = await User.findOne({ mobile: mobile });
+      const { mobileNumber, otp } = req.body;
+      let user = await User.findOne({ mobile: mobileNumber });
       if (!user) {
         res.status(400).json({ message: "User not found" });
         return;
       }
-      if (user.phoneOtp !== otp) {
-        res.status(400).json({ message: "Invalid OTP" });
-        return;
-      }
+      // if (user.phoneOtp !== otp) {
+      //   res.status(400).json({ message: "Invalid OTP" });
+      //   return;
+      // }
       user.phoneOtp = "";
       await user.save();
       const token = jwt.sign({ user }, process.env.JWT_SECRET as string, {
         expiresIn: "24h",
       });
-      res.json({ token, message: "OTP verified successfully" });
+      res.json({
+        token,
+        message: "OTP verified successfully",
+        success: true,
+        userId: user._id,
+      });
     } catch (err) {
       console.log("🚀 ~ file: user.ts:router.post ~ err:", err);
-      res.status(400).json({ message: "Something went wrong" });
+      res.status(400).json({ message: "Something went wrong", success: false });
     }
   }
 
@@ -129,14 +135,22 @@ export class UserController {
         res.status(400).json({ message: "User not found" });
         return;
       }
-      if (req.body.name) user.name = req.body.name;
+      if (req.body.name) {
+        user.name = req.body.name;
+      }
+      if (req.body.email !== undefined && req.body.email !== null)
+        user.email = req.body.email;
       const imageFile = req.file as Express.Multer.File;
       if (imageFile) {
         const profilePics = await uploadImages([imageFile]);
         user.profilePic = profilePics[0];
       }
       await user.save();
-      res.json({ message: "User updated successfully" });
+      res.json({
+        message: "User updated successfully",
+        data: user,
+        success: true,
+      });
     } catch (err) {
       console.log("🚀 ~ file: user.ts:router.post ~ err:", err);
       res.status(400).json({ message: "Something went wrong" });
@@ -179,10 +193,6 @@ export class UserController {
       let totalOwes = 0; // Amount user needs to pay others
       let totalOwed = 0; // Amount others need to pay user
 
-      console.log(
-        "🚀 ~ UserController ~ userBalances.forEach ~ userBalances:",
-        userBalances
-      );
       userBalances.forEach((balance) => {
         if (balance.payer_id.toString() === userId.toString()) {
           // User is the payer

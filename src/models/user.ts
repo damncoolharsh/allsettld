@@ -11,10 +11,10 @@ export type UserType = {
 };
 
 const userSchema = new mongoose.Schema<UserType>({
-  email: { type: String, required: true, unique: true },
+  email: { type: String, unique: true },
   mobile: { type: String, required: true, unique: true },
-  password: { type: String, required: true, select: false },
-  name: { type: String, required: true },
+  password: { type: String, select: false },
+  name: { type: String },
   profilePic: { type: String },
   phoneOtp: { type: String },
 });
